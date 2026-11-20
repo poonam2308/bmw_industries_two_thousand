@@ -165,13 +165,180 @@ def _suppress(dets):
     return keep
 
 
+# --- Zeichen 314 "Parken": white P on a blue square ------------------------------------------------------------------
+#
+# Unlike the round signs this one is easy in grayscale: white P on dark blue is high contrast. Candidates are convex
+# quadrilaterals (contours); each is compared with a rendered template by normalised correlation.
+
+PARKING = 'parking'
+INSET = 0.06   # white border width, fraction of the sign's side
+
+
+def render_parking(size=256, background=(200, 200, 200)):
+    img = np.full((size, size, 3), background, np.uint8)
+    s = size
+    cv2.rectangle(img, (1, 1), (s - 2, s - 2), WHITE, -1)
+    b = int(s * INSET)
+    cv2.rectangle(img, (b, b), (s - 1 - b, s - 1 - b), BLUE, -1)
+    pt = lambda fx, fy: (int(fx * s), int(fy * s))                                          # noqa: E731
+    cv2.rectangle(img, pt(0.33, 0.22), pt(0.45, 0.80), WHITE, -1)                           # stem
+    cv2.ellipse(img, pt(0.45, 0.37), (int(0.20 * s), int(0.15 * s)), 0, -90, 90, WHITE, -1)  # bowl
+    cv2.ellipse(img, pt(0.45, 0.37), (int(0.09 * s), int(0.065 * s)), 0, -90, 90, BLUE, -1)  # hole
+    return img
+
+
+def _ncc(a, b):
+    a = a.astype(np.float32) - a.mean()
+    b = b.astype(np.float32) - b.mean()
+    return float((a * b).sum() / (np.sqrt((a * a).sum() * (b * b).sum()) + 1e-6))
+
+
+def _templates():
+    g = cv2.cvtColor(render_parking(N * 4), cv2.COLOR_BGR2GRAY)
+    full = cv2.resize(g, (N, N), interpolation=cv2.INTER_AREA)
+    b = int(N * 4 * INSET)
+    inner = cv2.resize(g[b:-b, b:-b], (N, N), interpolation=cv2.INTER_AREA)
+    return {'full': full, 'inner': inner}
+
+
+P_TEMPLATES = _templates()
+
+
+class ParkingSignDetector:
+    def __init__(self, min_side=28, min_score=0.6):   # below ~30 px it is unreliable (and plates unreadable)
+        self.min_side, self.min_score = min_side, min_score
+
+    def candidates(self, gray):
+        edges = cv2.dilate(cv2.Canny(cv2.GaussianBlur(gray, (3, 3), 0), 50, 150), np.ones((2, 2), np.uint8))
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        boxes = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < self.min_side ** 2:
+                continue
+            approx = cv2.approxPolyDP(c, 0.04 * cv2.arcLength(c, True), True)
+            x, y, w, h = cv2.boundingRect(approx)
+            if len(approx) == 4 and cv2.isContourConvex(approx) and 0.75 < w / h < 1.33 and area > 0.8 * w * h:
+                boxes.append((x, y, w, h))
+        return boxes
+
+    def classify(self, frame, gray, box):
+        x, y, w, h = box
+        patch = cv2.resize(gray[y:y + h, x:x + w], (N, N), interpolation=cv2.INTER_AREA)
+        # Whole sign AND its right half (the P's bowl) must match: a white bar on a square matches the stem only.
+        scores = {k: min(_ncc(patch, t), _ncc(patch[:, N // 2:], t[:, N // 2:])) for k, t in P_TEMPLATES.items()}
+        which, score = max(scores.items(), key=lambda kv: kv[1])
+        if score < self.min_score:
+            return None
+        if is_color(frame):   # colour available: the square must also be blue
+            hsv = cv2.cvtColor(cv2.resize(frame[y:y + h, x:x + w], (N, N)), cv2.COLOR_BGR2HSV)
+            blue = (hsv[..., 0] > 95) & (hsv[..., 0] < 135) & (hsv[..., 1] > 80)
+            if blue.mean() < 0.25:
+                return None
+        if which == 'inner':   # the contour was the blue square: grow the box to the sign's outer edge
+            m = INSET / (1 - 2 * INSET)
+            x, y, w, h = x - m * w, y - m * h, w * (1 + 2 * m), h * (1 + 2 * m)
+        return Detection(PARKING, score, (x, y, x + w, y + h))
+
+    def __call__(self, frame):
+        gray = frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        found = [d for d in (self.classify(frame, gray, b) for b in self.candidates(gray)) if d]
+        return _suppress(found)
+
+
+def detect_all_signs(frame, round_detector, parking_detector):
+    """Round and P signs together. A round-sign hit whose centre lies inside a P sign or inside any sign's extra
+    plate is dropped: in grayscale the P's bowl and round letters on plates can look like weak round signs."""
+    parking = parking_detector(frame) if parking_detector else []
+    round_ = round_detector(frame) if round_detector else []
+    excluded = [p.box for p in parking] + [b for b in (find_plate(frame, d.box) for d in parking + round_) if b]
+
+    def inside(d, box):
+        cx, cy = (d.box[0] + d.box[2]) / 2, (d.box[1] + d.box[3]) / 2
+        return box[0] <= cx <= box[2] and box[1] <= cy <= box[3]
+
+    return [d for d in round_ if not any(inside(d, box) for box in excluded)] + parking
+
+
+# --- extra plates (Zusatzzeichen) under a sign ---------------------------------------------------------------------
+
+def render_plate(lines, width=256):
+    """White plate with a thin black border and black text, one row per line."""
+    line_h = int(width * 0.22)
+    h = line_h * len(lines) + int(width * 0.06)
+    img = np.full((h, width, 3), 255, np.uint8)
+    cv2.rectangle(img, (0, 0), (width - 1, h - 1), (0, 0, 0), max(1, width // 80))
+    font, thick = cv2.FONT_HERSHEY_SIMPLEX, max(1, width // 70)
+    for i, text in enumerate(lines):
+        scale = 1.0
+        (tw, th), _ = cv2.getTextSize(text, font, scale, thick)
+        scale = min(0.85 * width / tw, 0.6 * line_h / th)
+        (tw, th), _ = cv2.getTextSize(text, font, scale, thick)
+        y = int(width * 0.03) + i * line_h + (line_h + th) // 2
+        cv2.putText(img, text, ((width - tw) // 2, y), font, scale, (0, 0, 0), thick, cv2.LINE_AA)
+    return img
+
+
+def render_with_plates(kind, size=256, plates=(), background=(200, 200, 200)):
+    """A sign with extra plates hanging below it (each plate a list of text lines)."""
+    sign = render_parking(size, background) if kind == PARKING else render_sign(kind, size, background)
+    parts = [sign]
+    for lines in plates:
+        gap = np.full((int(size * 0.04), size, 3), background, np.uint8)
+        parts += [gap, render_plate(lines, size)]
+    return np.vstack(parts)
+
+
+def find_plate(frame, sign_box):
+    """Bounding box (x1, y1, x2, y2) of the plate(s) directly below a sign, or None if there is none.
+
+    A plate is a bright rectangle about as wide as the sign, starting just below it, with some dark text inside.
+    Stacked plates are merged. Plates against a white wall cannot be separated and count as none."""
+    gray = frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    H, W = gray.shape
+    x1, y1, x2, y2 = sign_box
+    w = x2 - x1
+    rx1, rx2 = int(max(0, x1 - 0.25 * w)), int(min(W, x2 + 0.25 * w))
+    ry1, ry2 = int(min(H, y2)), int(min(H, y2 + 1.8 * w))
+    if ry2 - ry1 < 0.12 * w or rx2 - rx1 < 0.6 * w:
+        return None
+    roi = gray[ry1:ry2, rx1:rx2]
+    _, bright = cv2.threshold(roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    k = max(3, int(0.08 * w) | 1)
+    filled = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))   # fill the dark text
+    contours, _ = cv2.findContours(filled, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    plates = []
+    for c in contours:
+        x, y, pw, ph = cv2.boundingRect(c)
+        cx = rx1 + x + pw / 2
+        inner = bright[y + ph // 6:y + ph - ph // 6, x + pw // 10:x + pw - pw // 10]
+        text = 1 - inner.mean() / 255 if inner.size else 0     # dark fraction in the interior: the text
+        if (0.6 * w <= pw <= 1.4 * w and 0.12 * w <= ph <= 1.2 * w and abs(cx - (x1 + x2) / 2) < 0.3 * w
+                and cv2.contourArea(c) > 0.75 * pw * ph and 0.03 < text < 0.5):
+            plates.append((rx1 + x, ry1 + y, rx1 + x + pw, ry1 + y + ph))
+    plates.sort(key=lambda b: b[1])
+    if not plates or plates[0][1] - y2 > 0.35 * w:
+        return None
+    box = list(plates[0])
+    for p in plates[1:]:                       # stacked plates: each starts right below the previous one
+        if p[1] - box[3] > 0.15 * w:
+            break
+        box = [min(box[0], p[0]), box[1], max(box[2], p[2]), p[3]]
+    return tuple(box)
+
+
 def main():
-    p = argparse.ArgumentParser(description='Render a sign as a printable PNG (white background).')
-    p.add_argument('kind', choices=LABELS)
+    p = argparse.ArgumentParser(
+        description='Render a sign (optionally with extra plates) as a printable PNG (white background).',
+        epilog='example: python3 -m parking_rules.signs parking p.png --plate "8-11 h" --plate "max. 3 Std."')
+    p.add_argument('kind', choices=LABELS + (PARKING,))
     p.add_argument('out')
-    p.add_argument('--size', type=int, default=1200, help='pixels (1200 px at 150 dpi = 20 cm)')
+    p.add_argument('--size', type=int, default=1200, help='sign width in pixels (1200 px at 150 dpi = 20 cm)')
+    p.add_argument('--plate', action='append', default=[],
+                   help='an extra plate below the sign; use | for line breaks ("Mo-Fr|8-18 h"); repeat for more')
     a = p.parse_args()
-    cv2.imwrite(a.out, render_sign(a.kind, a.size, background=WHITE))
+    plates = [t.split('|') for t in a.plate]
+    cv2.imwrite(a.out, render_with_plates(a.kind, a.size, plates, background=WHITE))
     print(f'wrote {a.out}')
 
 

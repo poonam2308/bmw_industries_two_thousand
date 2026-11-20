@@ -3,3 +3,6 @@ ultralytics
 opencv-python
 numpy
 pytest
+# Plate readers (pick one or both, see parking_rules/readers.py):
+pytesseract   # also needs the tesseract program: apt install tesseract-ocr tesseract-ocr-deu / brew install tesseract
+anthropic     # Claude vision reader; needs internet and an API key

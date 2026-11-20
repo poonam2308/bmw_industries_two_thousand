@@ -7,14 +7,20 @@ Two kinds of zone:
   - circle around an object (fire hydrant: keep it clear)
   - strip that starts at a sign and runs along the road in the direction of travel, on the sign's side of the road
     (StVO: no-parking / no-stopping signs apply from the sign onward until the next junction or an end sign)
+A sign's zone can carry the schedule read from its extra plate ("Mo-Fr 8-18 h, max. 2 Std."); then legality also
+depends on *when* and *how long* you park (see plates.py). A parking sign (Zeichen 314) without a plate allows
+parking, so it never makes a pose illegal.
 
 Distances are scaled for BITT (about 1.3 m long, roughly a quarter of a real car). For reference, real German rules
 (StVO §12): no parking within 5 m of a junction, none in front of driveways or lowered kerbs; hydrants and fire-brigade
 access must stay clear.
 """
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
+from datetime import datetime
 import json
 import math
+
+from .plates import Schedule, violation
 
 # Car outline in base_link (centre of the rear axle, x forward, y left), with padding. From the sim's
 # robot_config.yaml (footprint_with_padding_base_link).
@@ -39,6 +45,7 @@ RULES = {
     'fire hydrant': CircleRule(1.0, 'too close to a fire hydrant'),
     'no_parking': StripRule(3.0, 1.2, 'no-parking sign (Zeichen 286)'),
     'no_stopping': StripRule(3.0, 1.2, 'no-stopping sign (Zeichen 283)'),
+    'parking': StripRule(3.0, 1.2, 'parking area (Zeichen 314)'),
 }
 
 
@@ -50,6 +57,8 @@ class Zone:
     reason: str
     radius: float = 0.0   # circle zones
     polygon: list = None  # strip zones: [[x, y], ...] corners in the fixed frame, convex
+    plate: str = 'none'   # extra plate: 'none' (not seen), 'unread' (seen, not understood yet), 'read'
+    schedule: dict = None  # Schedule.to_dict() of the plate, when read
 
 
 def strip_polygon(x, y, heading, side, length, width):
@@ -62,15 +71,19 @@ def strip_polygon(x, y, heading, side, length, width):
             [x + length * dx + width * nx, y + length * dy + width * ny], [x + width * nx, y + width * ny]]
 
 
-def zones_from_landmarks(landmarks, rules=RULES):
+def zones_from_landmarks(landmarks, rules=RULES, plates=None):
+    """plates: {landmark id: (status, Schedule or None)} from the plate reader; missing = no plate seen."""
+    plates = plates or {}
     zones = []
     for lm in landmarks:
         rule = rules.get(lm.label)
         if isinstance(rule, CircleRule):
             zones.append(Zone(lm.label, lm.x, lm.y, rule.reason, radius=rule.radius))
         elif isinstance(rule, StripRule) and lm.heading is not None and lm.side:
+            status, schedule = plates.get(lm.id, ('none', None))
             zones.append(Zone(lm.label, lm.x, lm.y, rule.reason,
-                              polygon=strip_polygon(lm.x, lm.y, lm.heading, lm.side, rule.length, rule.width)))
+                              polygon=strip_polygon(lm.x, lm.y, lm.heading, lm.side, rule.length, rule.width),
+                              plate=status, schedule=schedule.to_dict() if schedule else None))
     return zones
 
 
@@ -124,13 +137,23 @@ def convex_polygons_overlap(a, b):
     return True
 
 
-def violates(poly, zone):
+def touches(poly, zone):
     if zone.polygon:
         return convex_polygons_overlap(poly, [tuple(p) for p in zone.polygon])
     return polygon_hits_circle(poly, zone.x, zone.y, zone.radius)
 
 
-def check_pose(x, y, yaw, zones, footprint=FOOTPRINT):
-    """Return the list of violated zones for parking with base_link at (x, y, yaw). Empty list = legal."""
+def check_pose(x, y, yaw, zones, when=None, minutes=60, footprint=FOOTPRINT):
+    """Zones that make parking with base_link at (x, y, yaw) illegal, starting `when` (local time at the signs,
+    default now) for `minutes`. Empty list = legal. Each returned zone's `reason` says why."""
+    when = when or datetime.now()
     poly = footprint_at(x, y, yaw, footprint)
-    return [z for z in zones if violates(poly, z)]
+    bad = []
+    for z in zones:
+        if not touches(poly, z):
+            continue
+        schedule = Schedule.from_dict(z.schedule) if z.schedule else None
+        why = violation(z.kind, z.reason, schedule, z.plate, when, minutes)
+        if why:
+            bad.append(replace(z, reason=why))
+    return bad

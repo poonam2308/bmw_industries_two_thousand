@@ -2,6 +2,12 @@
 
     ros2 run parking_rules check_spot 3.0 1.5 0.0          # x y [m] yaw [rad] of base_link in odom
     ros2 run parking_rules check_spot --here               # the car's current pose
+    ros2 run parking_rules check_spot --here --for 3h      # for how long (default 1h; matters for time limits)
+    ros2 run parking_rules check_spot --here --at 10:30    # at another time today (default now)
+    ros2 run parking_rules check_spot --here --at "2026-11-21 09:00" --for 90m
+
+Times are local time at the signs, from YOUR LAPTOP's clock (the car's clock is often wrong) in --tz (default
+Europe/Berlin, because the dev container usually runs in UTC).
 
 Exit code 0 = legal, 1 = illegal, 2 = no zones received. In your own parking planner do not shell out to this:
 subscribe to /parking_rules/zones and call parking_rules.zones.check_pose() directly, as below.
@@ -18,6 +24,7 @@ from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
+from .plates import parse_minutes, parse_when
 from .zones import check_pose, zones_from_json
 
 
@@ -25,10 +32,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('pose', nargs='*', type=float, help='x y yaw of base_link in odom')
     p.add_argument('--here', action='store_true', help='use the current pose of the car')
+    p.add_argument('--at', default='now', help='start time: HH:MM today or "YYYY-MM-DD HH:MM" (default now)')
+    p.add_argument('--for', dest='duration', default='1h', help='how long: 2h, 1.5h, 90m, 1h30 (default 1h)')
+    p.add_argument('--tz', default='Europe/Berlin', help='time zone of the signs')
     p.add_argument('--timeout', type=float, default=3.0)
     args = p.parse_args(rclpy.utilities.remove_ros_args(sys.argv)[1:])
     if not args.here and len(args.pose) != 3:
         p.error('give x y yaw, or --here')
+    try:
+        when, minutes = parse_when(args.at, args.tz), parse_minutes(args.duration)
+    except ValueError as e:
+        p.error(str(e))
 
     rclpy.init()
     node = Node('check_spot')
@@ -58,8 +72,9 @@ def main():
     else:
         x, y, yaw = args.pose
 
-    bad = check_pose(x, y, yaw, zones)
-    print(f'pose ({x:.2f}, {y:.2f}, {math.degrees(yaw):.0f}°), {len(zones)} zone(s) known')
+    bad = check_pose(x, y, yaw, zones, when=when, minutes=minutes)
+    print(f'pose ({x:.2f}, {y:.2f}, {math.degrees(yaw):.0f}°), from {when:%a %Y-%m-%d %H:%M} for {minutes} min, '
+          f'{len(zones)} zone(s) known')
     if bad:
         for z in bad:
             print(f'  ILLEGAL: {z.reason} at ({z.x:.2f}, {z.y:.2f})')

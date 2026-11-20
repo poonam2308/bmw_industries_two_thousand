@@ -1,4 +1,5 @@
 import math
+from datetime import datetime
 
 from parking_rules.tracker import Tracker
 from parking_rules.zones import Zone, check_pose, zones_from_json, zones_from_landmarks, zones_to_json
@@ -113,3 +114,46 @@ def test_hydrant_and_sign_at_same_place_stay_separate():
 def test_strip_zone_json_roundtrip():
     zones = _sign_zone()
     assert zones_from_json(zones_to_json(zones)) == zones
+
+
+# --- signs with extra plates: legality depends on time and duration -----------------------------------------------
+
+def _timed_zone(label, plate_text, status='read'):
+    from parking_rules.plates import parse
+    t = Tracker(min_hits=1)
+    lm = t.update(label, 5.0, -1.5, 0, heading=0.0, side=-1)
+    return zones_from_landmarks(t.confirmed(), plates={lm.id: (status, parse(plate_text) if plate_text else None)})
+
+
+FRIDAY_9 = datetime(2026, 11, 20, 9, 0)
+
+
+def test_parking_sign_max_duration_in_zone():
+    zones = _timed_zone('parking', 'Mo-Fr 8-18 h max. 2 Std.')
+    assert check_pose(6.0, -0.9, 0.0, zones, when=FRIDAY_9, minutes=60) == []
+    [bad] = check_pose(6.0, -0.9, 0.0, zones, when=FRIDAY_9, minutes=180)
+    assert bad.reason.startswith('max. 2 h parking')
+    assert check_pose(6.0, -0.9, 0.0, zones, when=datetime(2026, 11, 21, 9), minutes=600) == []   # Saturday
+
+
+def test_parking_sign_without_plate_never_blocks():
+    zones = _timed_zone('parking', None, status='none')
+    assert check_pose(6.0, -0.9, 0.0, zones, when=FRIDAY_9, minutes=24 * 60) == []
+
+
+def test_no_parking_sign_only_during_plate_hours():
+    zones = _timed_zone('no_parking', 'Mo-Fr 7-9 h')
+    assert check_pose(6.0, -0.9, 0.0, zones, when=datetime(2026, 11, 20, 8), minutes=30)
+    assert check_pose(6.0, -0.9, 0.0, zones, when=FRIDAY_9, minutes=120) == []
+
+
+def test_unread_plate_blocks_until_read():
+    [bad] = check_pose(6.0, -0.9, 0.0, _timed_zone('parking', None, status='unread'), when=FRIDAY_9)
+    assert 'not read yet' in bad.reason
+
+
+def test_timed_zone_json_roundtrip():
+    zones = _timed_zone('parking', 'Mo-Fr 8-18 h max. 2 Std.')
+    back = zones_from_json(zones_to_json(zones))
+    assert check_pose(6.0, -0.9, 0.0, back, when=FRIDAY_9, minutes=180)[0].reason == \
+        check_pose(6.0, -0.9, 0.0, zones, when=FRIDAY_9, minutes=180)[0].reason
