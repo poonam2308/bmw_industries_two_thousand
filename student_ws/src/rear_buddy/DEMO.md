@@ -114,6 +114,35 @@ people get a friendly hello and only Porsche/Audi/BMW photos get the pitch. Add 
 - The laptop sends **LED animations** to `/lights_cmd` 10 times per second, and pushes the text to the phone's
   web page.
 
+### How it works with ROS
+
+The car runs **ROS 2**. Inside the car, programs talk by sending messages on named channels called **topics**: the
+camera sends pictures on one topic, and the lights listen on another. Rear Buddy joins in: it listens to three topics
+and sends on one.
+
+```text
+the car (ROS 2: camera, wheels, battery, lights)
+   ⇄  Foxglove bridge on the car (ws://10.42.0.1:8765, passes ROS messages over Wi-Fi)
+   ⇄  Rear Buddy on the laptop (no ROS installed)
+```
+
+| ROS topic | Direction | What it carries |
+|---|---|---|
+| `/back_camera/image/compressed` | car → laptop | The rear camera picture, as JPEG (`sensor_msgs/CompressedImage`) |
+| `/wheel_odom` | car → laptop | Wheel speed. Standing still for 30 s behind a car means "stuck in traffic", and the jokes start (`car_interfaces/WheelOdom`) |
+| `/batt_status` | car → laptop | Battery voltage, for the battery jokes (`car_interfaces/BattStatus`) |
+| `/lights_cmd` | laptop → car | The colour of all 32 rear lights, 10 times per second (`car_interfaces/LightsCmd`) |
+
+- **No ROS on the laptop:** the car's Foxglove bridge passes the messages over Wi-Fi, the same way the Foxglove app
+  does for its light buttons. Rear Buddy reads and writes them in the exact ROS 2 binary format (CDR), see
+  [foxglove_client.py](rear_buddy/foxglove_client.py) and [cdr.py](rear_buddy/cdr.py).
+- **The light buttons are overridden:** `/lights_cmd` is "last message wins". While Rear Buddy runs, it controls the
+  rear lights, so the light buttons in the Foxglove app have no effect until it is stopped.
+- **With ROS installed** (Linux or the dev container), the same logic also runs as native ROS 2 nodes:
+  `ros2 launch rear_buddy rear_buddy.launch.py`. That path has not been run yet: there is no ROS on the Mac.
+- **Tested so far** with a real ROS recording from the car (replay mode) and a simulated bridge. The demo is the first
+  run with the live car, which is why §2 checks the camera and the lights first.
+
 ---
 
 ## 5. Backup plan: replay instead of live
