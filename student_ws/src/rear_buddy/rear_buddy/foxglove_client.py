@@ -83,6 +83,7 @@ class FoxgloveClient:
     # ---- receiving ------------------------------------------------------------------------------------------
 
     def _run(self):
+        last_error = None
         while not self._stop.is_set():
             try:
                 with connect(self.url, subprotocols=[SUBPROTOCOL], max_size=None, open_timeout=5) as ws:
@@ -90,14 +91,18 @@ class FoxgloveClient:
                         self._ws = ws
                         self.server_channels.clear()
                         self.subscriptions.clear()
+                    last_error = None
                     for raw in ws:
                         if isinstance(raw, str):
                             self._on_text(json.loads(raw))
                         else:
                             self._on_binary(raw)
-            except Exception as e:  # noqa: BLE001 - any connection problem: report and retry
-                if not self._stop.is_set():
-                    self.log(f'bridge {self.url}: {e or type(e).__name__}; retrying in {self.retry_s:.0f} s')
+                    raise ConnectionError('connection closed')
+            except Exception as e:  # noqa: BLE001 - any connection problem: report once and keep retrying
+                error = str(e) or type(e).__name__
+                if not self._stop.is_set() and error != last_error:
+                    self.log(f'bridge {self.url}: {error}; retrying every {self.retry_s:.0f} s')
+                last_error = error
             finally:
                 self.connected.clear()
                 with self._lock:

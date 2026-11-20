@@ -36,6 +36,7 @@ DEFINITIONS = {
 
 _TYPE = re.compile(r'^(?P<base>[A-Za-z_][\w/]*?)(?:<=\d+)?(?:\[(?P<bound><=)?(?P<size>\d*)\])?$')
 _SECTION = re.compile(r'^={10,}\s*$', re.M)
+_CONSTANT = re.compile(r'^\w+\s*=')
 
 
 @dataclass
@@ -56,9 +57,12 @@ def parse(definition, package=''):
     fields = []
     for raw in definition.splitlines():
         line = raw.split('#', 1)[0].strip()
-        if not line or '=' in line:  # '=' marks a constant
+        if not line:
             continue
-        typ, name = line.split()[:2]
+        typ, rest = line.split(None, 1)
+        if _CONSTANT.match(rest):  # NAME=value after the type (bounded types like int32[<=4] also contain '=')
+            continue
+        name = rest.split()[0]
         m = _TYPE.match(typ)
         if not m:
             raise ValueError(f'cannot parse field type {typ!r}')

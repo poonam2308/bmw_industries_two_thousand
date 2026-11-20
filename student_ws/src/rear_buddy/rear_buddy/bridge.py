@@ -12,6 +12,8 @@ jokes) and /batt_status (battery jokes); publishes /lights_cmd 10 times per seco
 Foxglove are overridden ("last message wins"); Ctrl-C switches the lights off and quits.
 """
 import argparse
+import signal
+import threading
 import time
 
 import cv2
@@ -49,6 +51,7 @@ class Runner:
         self.car = CarState(clock)
         self.latest_image = None
         self.images = 0
+        self.warned_no_images = False
         self.checked = set()
         self.started = clock()
         self.last_detect = -1e9
@@ -76,10 +79,8 @@ class Runner:
         ours = TYPES.get(topic, 'sensor_msgs/CompressedImage' if topic == self.camera_topic else None)
         if not ours or channel.get('schemaEncoding') != 'ros2msg' or not channel.get('schema'):
             return
-        theirs = schema_sections(channel.get('schemaName', ours), channel['schema']).get(ours.replace('/msg/', '/'))
-        if theirs is None:
-            theirs = schema_sections(channel.get('schemaName', ours), channel['schema'])[
-                next(iter(schema_sections(channel.get('schemaName', ours), channel['schema'])))]
+        sections = schema_sections(channel.get('schemaName', ours), channel['schema'])
+        theirs = sections.get(ours, next(iter(sections.values())))
         if [f.name for f in parse(theirs)] != [f.name for f in self.codec.fields(ours)]:
             self.log(f'warning: {topic} on the car has different fields than expected; values may be wrong')
 
@@ -93,8 +94,8 @@ class Runner:
             self.publish(LIGHTS, self.codec.encode('car_interfaces/LightsCmd', {
                 'front_rgb': list(self.front) * 4, 'rear_rgb': to_rear_rgb(pixels, self.reverse),
                 'mode': 0, 'blink_period_ms': 500, 'flags': 0}))
-        if self.images == 0 and now - self.started > NO_IMAGE_WARN_S and not getattr(self, '_warned', False):
-            self._warned = True
+        if self.images == 0 and now - self.started > NO_IMAGE_WARN_S and not self.warned_no_images:
+            self.warned_no_images = True
             self.log(f'no images on {self.camera_topic} after {NO_IMAGE_WARN_S:.0f} s: is the rear camera connected? '
                      'Try --topic /preview/left/compressed to test with the front camera.')
 
@@ -153,9 +154,14 @@ def main():
     print(f'connecting to {args.url} (laptop on the BITT Wi-Fi?) ... Ctrl-C to stop')
     client.start()
 
+    # Ctrl-C, closing the terminal and `kill` all just ask the loop to stop, so the lights are always switched off
+    # (also when the signal comes twice).
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda *_: stop.set())
     period = 1.0 / args.led_hz
     try:
-        while True:
+        while not stop.is_set():
             start = time.monotonic()
             runner.tick()
             if args.show and runner.view is not None:
@@ -163,9 +169,7 @@ def main():
                                                          time.monotonic() - runner.anim_since))
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
-            time.sleep(max(0.0, period - (time.monotonic() - start)))
-    except KeyboardInterrupt:
-        pass
+            stop.wait(max(0.0, period - (time.monotonic() - start)))
     finally:
         for _ in range(3):  # make sure "off" arrives
             runner.lights_off()

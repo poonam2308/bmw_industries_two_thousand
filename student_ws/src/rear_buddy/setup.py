@@ -21,6 +21,7 @@ setup(
             'rear_buddy_leds = rear_buddy.led_node:main',
             'rear_buddy_display = rear_buddy.display_node:main',
             'rear_buddy_offline = rear_buddy.offline:main',
+            'rear_buddy_bridge = rear_buddy.bridge:main',
         ],
     },
 )

@@ -46,6 +46,27 @@ The webcam window shows the rear LED bar on top, playing the current animation.
 
 The first run downloads the YOLO weights (`yolo11n.pt`, about 6 MB).
 
+## With the car, from your laptop (no ROS, no Docker): bridge mode
+
+The car runs a Foxglove bridge (`ws://10.42.0.1:8765`). Bridge mode talks to it directly: rear camera, `/wheel_odom`
+and `/batt_status` in, `/lights_cmd` out, and the phone display served from the laptop.
+
+```bash
+# laptop on the BITT Wi-Fi
+python3 -m rear_buddy.bridge --display --show          # camera window + phone display, LEDs on the car
+python3 -m rear_buddy.bridge --display --fancy always   # demo the job pitch with a car photo
+python3 -m rear_buddy.bridge --display --flirt          # demo only
+python3 -m rear_buddy.bridge --no-leds --show           # watch only, leave the car's lights alone
+python3 -m rear_buddy.bridge --topic /preview/left/compressed --show   # front camera, if the rear one is missing
+```
+
+- Ctrl-C (or closing the terminal) switches the car's lights off and disconnects.
+- While it runs it overrides the light buttons in Foxglove (`/lights_cmd` is "last message wins").
+- It reconnects by itself after Wi-Fi drops. After 10 s without camera images it tells you so.
+- How: [foxglove_client.py](rear_buddy/foxglove_client.py) speaks the Foxglove WebSocket protocol,
+  [cdr.py](rear_buddy/cdr.py) (de)serialises the ROS messages, [bridge.py](rear_buddy/bridge.py) runs the same
+  detection, rules, LEDs and display as everywhere else.
+
 ## On the car (dev container)
 
 ```bash
