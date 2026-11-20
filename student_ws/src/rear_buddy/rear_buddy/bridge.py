@@ -17,15 +17,15 @@ import threading
 import time
 
 import cv2
-import numpy as np
 
 from .animations import render, to_rear_rgb
 from .car_state import CarState
-from .cdr import Codec, parse, schema_sections
+from .cdr import Codec, normalize, parse, schema_sections
 from .detector import Detector
 from .display_server import DisplayServer
 from .fancy import make_fancy_check
 from .foxglove_client import FoxgloveClient
+from .images import COMPRESSED, to_bgr
 from .messages import QR_SCENES, QR_URL
 from .offline import print_reaction, with_leds
 from .pipeline import analyse, draw
@@ -38,15 +38,19 @@ NO_IMAGE_WARN_S = 10.0
 
 
 class Runner:
-    """The brain, independent of the connection: feed it bridge messages, call tick() regularly."""
+    """The brain, independent of the connection: feed it messages (from the bridge or a bag), call tick() regularly.
+    Camera messages may be CompressedImage (the car) or raw Image (the simulation), told apart by the channel's
+    schemaName."""
 
     def __init__(self, detector, fancy, director, camera_topic, publish=None, display=None, show=False,
-                 brightness=0.5, front='white', reverse=False, detect_hz=2.0, log=print, clock=time.monotonic):
+                 brightness=0.5, front='white', reverse=False, detect_hz=2.0, log=print, clock=time.monotonic,
+                 on_reaction=print_reaction):
         self.detector, self.fancy, self.director = detector, fancy, director
         self.camera_topic, self.publish, self.display, self.show = camera_topic, publish, display, show
         self.brightness, self.front, self.reverse = brightness, FRONT[front], reverse
         self.detect_every = 1.0 / detect_hz
-        self.log, self.clock = log, clock
+        self.log, self.clock, self.on_reaction = log, clock, on_reaction
+        self.camera_type = COMPRESSED
         self.codec = Codec()
         self.car = CarState(clock)
         self.latest_image = None
@@ -60,6 +64,8 @@ class Runner:
 
     def on_message(self, topic, payload, channel):
         """Runs on the client's thread: keep it cheap. Images are only stored, decoding happens in tick()."""
+        if topic == self.camera_topic and channel.get('schemaName'):
+            self.camera_type = normalize(channel['schemaName'])
         if topic not in self.checked:
             self.checked.add(topic)
             self._check_schema(topic, channel)
@@ -76,7 +82,7 @@ class Runner:
 
     def _check_schema(self, topic, channel):
         """Warn if the car's message definition differs from ours (then decoding would be wrong)."""
-        ours = TYPES.get(topic, 'sensor_msgs/CompressedImage' if topic == self.camera_topic else None)
+        ours = TYPES.get(topic, self.camera_type if topic == self.camera_topic else None)
         if not ours or channel.get('schemaEncoding') != 'ros2msg' or not channel.get('schema'):
             return
         sections = schema_sections(channel.get('schemaName', ours), channel['schema'])
@@ -100,15 +106,14 @@ class Runner:
                      'Try --topic /preview/left/compressed to test with the front camera.')
 
     def _detect(self, payload):
-        image = self.codec.decode('sensor_msgs/CompressedImage', payload)
-        frame = cv2.imdecode(np.frombuffer(image['data'], np.uint8), cv2.IMREAD_COLOR)
+        frame, problem = to_bgr(self.codec, self.camera_type, payload)
         if frame is None:
-            self.log(f'could not decode an image ({image["format"]})')
+            self.log(f'skipping an image from {self.camera_topic}: {problem}')
             return
         scene, subject, dets = analyse(frame, self.detector, self.fancy)
         reaction = self.director.update(scene, self.car.stopped_s(), self.car.battery_v())
         if reaction:
-            print_reaction(reaction)
+            self.on_reaction(reaction)
             self.text = reaction.text
             if self.display:
                 self.display.show(reaction.__dict__)

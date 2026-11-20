@@ -74,6 +74,22 @@ python3 -m rear_buddy.bridge --topic /preview/left/compressed --show   # front c
   [cdr.py](rear_buddy/cdr.py) (de)serialises the ROS messages, [bridge.py](rear_buddy/bridge.py) runs the same
   detection, rules, LEDs and display as everywhere else.
 
+## Replay a recorded drive (no ROS, no Docker, no car)
+
+Recorded bags (rosbag2, `.mcap` or `.db3`) from the car or the simulation play through exactly the code that runs at
+the car: detection, brand check, rules, LED bar and phone display, on the recording's clock.
+
+```bash
+python3 -m rear_buddy.replay bags/drive_1 --list                # what is in the bag
+python3 -m rear_buddy.replay bags/drive_1 --show --display      # real time, window + phone display
+python3 -m rear_buddy.replay bags/drive_1 --rate 0              # as fast as possible: the list of reactions
+python3 -m rear_buddy.replay bags/drive_1 --rate 2 --start 30   # double speed from 30 s in
+```
+
+- The camera may be the car's `CompressedImage` or the simulation's raw `Image`; `--topic` picks another camera.
+- `/wheel_odom` and `/batt_status` are used when recorded (standing still > 30 s behind a car -> traffic-jam jokes).
+- At the end it prints how long each scene was on the display.
+
 ## On the car (dev container)
 
 ```bash

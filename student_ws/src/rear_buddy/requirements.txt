@@ -3,5 +3,6 @@ ultralytics
 opencv-python
 segno
 websockets
+mcap              # replaying recorded bags
 open_clip_torch   # car brand check (CLIP)
 pytest

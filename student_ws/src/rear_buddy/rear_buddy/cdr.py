@@ -25,6 +25,8 @@ DEFINITIONS = {
     'builtin_interfaces/Time': 'int32 sec\nuint32 nanosec',
     'std_msgs/Header': 'builtin_interfaces/Time stamp\nstring frame_id',
     'sensor_msgs/CompressedImage': 'std_msgs/Header header\nstring format\nuint8[] data',
+    'sensor_msgs/Image': 'std_msgs/Header header\nuint32 height\nuint32 width\nstring encoding\nuint8 is_bigendian\n'
+                         'uint32 step\nuint8[] data',
     # From ros_ws/src/car_interfaces/msg (constants left out, they are not serialised).
     'car_interfaces/WheelOdom': 'std_msgs/Header header\nint32 left_count\nint32 right_count\n'
                                 'float32 left_speed_mps\nfloat32 right_speed_mps',
