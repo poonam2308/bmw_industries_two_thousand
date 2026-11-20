@@ -29,6 +29,7 @@ from .images import COMPRESSED, to_bgr
 from .messages import QR_SCENES, QR_URL
 from .offline import print_reaction, with_leds
 from .pipeline import analyse, draw
+from . import rules
 from .rules import Director
 
 WHEELS, BATTERY, LIGHTS = '/wheel_odom', '/batt_status', '/lights_cmd'
@@ -142,9 +143,14 @@ def main():
     p.add_argument('--front', default='white', choices=sorted(FRONT), help='headlights while running')
     p.add_argument('--reverse', action='store_true', help='flip the LED direction if sweeps run backwards')
     p.add_argument('--led-hz', type=float, default=10.0, help='LED updates per second')
+    p.add_argument('--pitch-people', action='store_true', help='people behind the car get the job pitch + QR code')
+    p.add_argument('--min-person', type=float, default=rules.MIN_PERSON_AREA,
+                   help='smallest person that counts, as a fraction of the image (higher = only people close by)')
     p.add_argument('--detect-hz', type=float, default=2.0, help='detections per second')
     p.add_argument('--model', default='yolo11n.pt', help='YOLO weights')
     args = p.parse_args()
+    rules.MIN_PERSON_AREA = args.min_person
+    rules.PITCH_PEOPLE = args.pitch_people
 
     display = None
     if args.display:

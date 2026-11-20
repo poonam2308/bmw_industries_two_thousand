@@ -136,3 +136,29 @@ def test_flirt_texts_name_the_flirt_profile():
     texts = [d.update('cyclist').text for _ in MESSAGES['cyclist_flirt']]
     assert all('{' not in t for t in texts)
     assert all(FLIRT_PROFILE['flirt_name'] in t for t in texts)
+
+
+def test_people_far_in_the_background_do_not_count():
+    far = det('person', (300, 200, 396, 296))   # 3 % of the image: above MIN_AREA, below MIN_PERSON_AREA
+    near = det('person', (200, 50, 400, 470))   # 27 %
+    assert classify([far])[0] == 'nobody'
+    assert classify([far, near])[1] is near
+    assert classify([far], min_person_area=0.001)[0] == 'pedestrian'  # threshold can be lowered
+
+
+def test_small_cars_and_bikes_still_count():
+    assert classify([det('car', (0, 0, 90, 60))])[0] == 'car'          # 1.8 %: cars keep the low minimum
+    bike = det('bicycle', (300, 300, 380, 380))                        # 2 %, rider even smaller
+    rider = det('person', (310, 250, 370, 330))
+    assert classify([bike, rider])[0] == 'cyclist'
+
+
+def test_pitch_people_gives_people_the_job_pitch_with_qr():
+    from rear_buddy.messages import QR_SCENES
+    plain = Director(confirm_frames=1, clock=FakeClock())
+    assert plain.update('pedestrian').scene == 'pedestrian'  # off by default
+    d = Director(confirm_frames=1, hold_s=0, pitch_people=True, clock=FakeClock())
+    r = d.update('pedestrian')
+    assert r.scene == 'person_pitch' and r.animation == 'gold_shine' and 'person_pitch' in QR_SCENES
+    assert '{' not in r.text
+    assert d.update('cyclist').scene == 'cyclist' and d.update('budget_car').scene == 'budget_car'

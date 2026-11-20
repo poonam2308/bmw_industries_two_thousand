@@ -44,7 +44,7 @@
     animation: scan 2.5s ease-in-out infinite alternate; }
   @keyframes scan { from { left: 0; } to { left: 82%; } }
 
-  .fancy_car { background: linear-gradient(110deg, #3a2600 0%, #7a5200 40%, #f5d27a 50%, #7a5200 60%, #3a2600 100%);
+  .fancy_car, .person_pitch { background: linear-gradient(110deg, #3a2600 0%, #7a5200 40%, #f5d27a 50%, #7a5200 60%, #3a2600 100%);
     background-size: 300% 100%; animation: shine 3s linear infinite; }
   @keyframes shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
 
@@ -84,7 +84,7 @@
 <div id="dot" title="connection to the laptop"></div>
 <div id="hint">tap for full screen</div>
 <script>
-  const EMOJI = { fancy_car: '🏎️✨', budget_car: '😊🚗', car: '👋🚗', stuck: '😴🚦', cyclist: '🚲💨', cyclist_flirt: '💘☕',
+  const EMOJI = { fancy_car: '🏎️✨', person_pitch: '👋💼', budget_car: '😊🚗', car: '👋🚗', stuck: '😴🚦', cyclist: '🚲💨', cyclist_flirt: '💘☕',
                   pedestrian: '👋🌈', nobody: '' };
   const stage = document.getElementById('stage'), emoji = document.getElementById('emoji'),
         text = document.getElementById('text'), fx = document.getElementById('fx'), qr = document.getElementById('qr'),

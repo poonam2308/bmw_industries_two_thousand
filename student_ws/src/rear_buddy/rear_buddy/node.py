@@ -26,6 +26,7 @@ from std_msgs.msg import String
 from .detector import Detector
 from .fancy import make_fancy_check
 from .pipeline import analyse
+from . import rules
 from .rules import Director
 
 STOPPED_MPS = 0.05  # below this wheel speed the car counts as standing still
@@ -40,6 +41,7 @@ class RearBuddy(Node):
         fancy = self.declare_parameter('fancy', 'clip').value  # car brand check: clip, always, budget, never
         rate_hz = self.declare_parameter('rate_hz', 2.0).value
         flirt = self.declare_parameter('flirt', False).value  # demo only: the car flirts with cyclists
+        rules.PITCH_PEOPLE = self.declare_parameter('pitch_people', False).value  # people get the job pitch
 
         self.detector = Detector(model)
         self.fancy = make_fancy_check(fancy, log=self.get_logger().info)

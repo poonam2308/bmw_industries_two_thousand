@@ -19,7 +19,7 @@ PROFILE = {
 
 # The rear display shows this link as a QR code on these scenes (needs `pip install segno`).
 QR_URL = 'https://www.linkedin.com/in/your-profile'
-QR_SCENES = {'fancy_car'}
+QR_SCENES = {'fancy_car', 'person_pitch'}
 
 # Who the demo-only flirt mode speaks for.
 FLIRT_PROFILE = {
@@ -50,6 +50,12 @@ MESSAGES = {
         'Behind you: a great car. In front of you: {pitch} looking for a job.\n'
         "Let's both move forward.\n{name} - {linkedin}",
         'I built the brain of this car.\nImagine what I could build for your company.\n{name} - {linkedin}',
+    ],
+    # A person behind us, with --pitch-people: the job pitch, spoken to a person who can scan the QR code.
+    'person_pitch': [
+        'Hi! Looking for {pitch}?\nYou just found one: {name}.\n{skills}\n{languages}\n{linkedin}',
+        '{name} built the brain of this car.\nImagine what {name} could build for your team.\nScan me: {linkedin}',
+        'Hiring? {name} is available.\n{skills}\n{linkedin}',
     ],
     # A budget or small car (Toyota, small cars) behind us.
     'budget_car': [
@@ -93,6 +99,7 @@ MESSAGES = {
 # Rear LED animation per scene (see animations.py).
 ANIMATIONS = {
     'fancy_car': 'gold_shine',
+    'person_pitch': 'gold_shine',
     'budget_car': 'breathing',
     'car': 'breathing',
     'stuck': 'sleepy',

@@ -28,6 +28,7 @@ from .fancy import make_fancy_check
 from .images import is_image_type
 from .messages import QR_SCENES, QR_URL
 from .offline import print_reaction, with_leds
+from . import rules
 from .rules import Director
 
 CAMERA = '/back_camera/image/compressed'
@@ -99,9 +100,14 @@ def main():
     p.add_argument('--fancy', default='clip', choices=['clip', 'always', 'budget', 'never'],
                    help='car brand check (as in bridge mode)')
     p.add_argument('--flirt', action='store_true', help='demo only: cyclists get the flirt texts')
+    p.add_argument('--pitch-people', action='store_true', help='people behind the car get the job pitch + QR code')
+    p.add_argument('--min-person', type=float, default=rules.MIN_PERSON_AREA,
+                   help='smallest person that counts, as a fraction of the image (higher = only people close by)')
     p.add_argument('--detect-hz', type=float, default=2.0, help='detections per second of recording')
     p.add_argument('--model', default='yolo11n.pt', help='YOLO weights')
     args = p.parse_args()
+    rules.MIN_PERSON_AREA = args.min_person
+    rules.PITCH_PEOPLE = args.pitch_people
 
     topics = bag_topics(args.bag)
     if args.list:

@@ -14,6 +14,15 @@ from .messages import ANIMATIONS, FLIRT_PROFILE, MESSAGES, PROFILE
 
 TIER_SCENES = {'premium': 'fancy_car', 'budget': 'budget_car'}  # brand check tier -> scene
 
+# Minimum box sizes as a fraction of the image (bigger = closer). People need more, so that someone far away in
+# the background does not count as "behind the car": in a recording from the car, people far down a corridor were
+# 1.6-1.8 % of the image, people close to the car 8-30 %. Set from the command line with --min-person.
+MIN_AREA = 0.01
+MIN_PERSON_AREA = 0.05
+
+# With --pitch-people, people on foot get the job pitch ('person_pitch') instead of the pedestrian hello.
+PITCH_PEOPLE = False
+
 
 def overlap(a, b):
     """Fraction of box a that lies inside box b."""
@@ -25,12 +34,16 @@ def overlap(a, b):
     return w * h / area if area > 0 else 0.0
 
 
-def classify(detections, min_area=0.01):
+def classify(detections, min_area=MIN_AREA, min_person_area=None):
     """The scene for one frame: fancy_car, budget_car, car, cyclist, pedestrian or nobody, plus the detection it is
     about.
 
-    The closest (biggest) subject wins. Tiny boxes (far away, below min_area of the image) are ignored.
+    The closest (biggest) subject wins. Tiny boxes (far away, below min_area of the image) are ignored, and people
+    on foot only count from min_person_area (default: MIN_PERSON_AREA). Riders and drivers do not need it: a
+    bicycle or a car is judged by its own box.
     """
+    if min_person_area is None:
+        min_person_area = MIN_PERSON_AREA
     dets = [d for d in detections if d.area >= min_area]
     bikes = [d for d in dets if d.label in BIKES]
     vehicles = [d for d in dets if d.label in VEHICLES]
@@ -42,6 +55,8 @@ def classify(detections, min_area=0.01):
             continue  # the driver seen through the windscreen belongs to the car
         if any(overlap(p, b) > 0.2 or overlap(b, p) > 0.2 for b in bikes):
             continue  # the rider belongs to the bicycle
+        if p.area < min_person_area:
+            continue  # in the background, not behind the car
         candidates.append(('pedestrian', p))
     if not candidates:
         return 'nobody', None
@@ -56,9 +71,10 @@ class Reaction:
 
 
 class Director:
-    def __init__(self, confirm_frames=3, hold_s=8.0, rotate_s=20.0, stuck_s=30.0, flirt=False,
+    def __init__(self, confirm_frames=3, hold_s=8.0, rotate_s=20.0, stuck_s=30.0, flirt=False, pitch_people=None,
                  clock=time.monotonic):
         self.flirt = flirt                    # demo only: cyclists get the 'cyclist_flirt' texts
+        self.pitch_people = PITCH_PEOPLE if pitch_people is None else pitch_people  # people get the job pitch
         self.confirm_frames = confirm_frames  # frames a new scene must be seen in a row
         self.hold_s = hold_s                  # a message stays up at least this long
         self.rotate_s = rotate_s              # same scene this long -> next text
@@ -76,6 +92,8 @@ class Director:
         """
         if scene == 'car' and stopped_s is not None and stopped_s >= self.stuck_s:
             scene = 'stuck'
+        if scene == 'pedestrian' and self.pitch_people:
+            scene = 'person_pitch'
         if scene == 'cyclist' and self.flirt:
             scene = 'cyclist_flirt'
         now = self.clock()

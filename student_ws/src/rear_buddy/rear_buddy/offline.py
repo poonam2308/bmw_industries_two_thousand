@@ -30,6 +30,7 @@ from .led_preview import bar_image
 from .fancy import make_fancy_check
 from .messages import QR_SCENES, QR_URL
 from .pipeline import analyse, draw
+from . import rules
 from .rules import Director
 
 IMAGE_TYPES = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
@@ -97,11 +98,16 @@ def main():
                    help='car brand check: clip (Porsche/Audi/BMW -> job pitch, Toyota/small -> old is gold) or a fixed answer')
     p.add_argument('--flirt', action='store_true', help='demo only: the car flirts with cyclists')
     p.add_argument('--model', default='yolo11n.pt', help='YOLO weights (downloaded on first use)')
+    p.add_argument('--pitch-people', action='store_true', help='people behind the car get the job pitch + QR code')
+    p.add_argument('--min-person', type=float, default=rules.MIN_PERSON_AREA,
+                   help='smallest person that counts, as a fraction of the image (higher = only people close by)')
     p.add_argument('--conf', type=float, default=0.4, help='minimum detection confidence')
     p.add_argument('--no-show', action='store_true', help='print only, no window')
     p.add_argument('--display', action='store_true', help='serve the rear display page for a phone')
     p.add_argument('--port', type=int, default=8080, help='port of the rear display page')
     args = p.parse_args()
+    rules.MIN_PERSON_AREA = args.min_person
+    rules.PITCH_PEOPLE = args.pitch_people
 
     detector = Detector(args.model, args.conf)
     fancy = make_fancy_check(args.fancy)
