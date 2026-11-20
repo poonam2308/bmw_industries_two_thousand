@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>Rear Buddy</title>
+<!-- Everything inline: the car's Wi-Fi has no internet. -->
+<style>
+  :root { --fg: #fff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--fg); overflow: hidden;
+    font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
+  #stage { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4vmin 5vmin; transition: background 0.8s; }
+  #emoji { font-size: 22vmin; line-height: 1.1; min-height: 1em; }
+  /* Text and QR code: stacked in portrait, side by side in landscape. */
+  #content { width: 100%; flex: 1 1 auto; min-height: 0; max-height: 78%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3vmin; }
+  #text { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-weight: 800; line-height: 1.15; white-space: pre-line; overflow-wrap: normal;
+    text-shadow: 0 0.06em 0.25em rgba(0,0,0,0.7); }
+  #qr { margin: 0; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; }
+  #qr img { width: 42vmin; height: 42vmin; background: #fff; border-radius: 1.5vmin; display: block; }
+  #qr figcaption { margin-top: 1.2vmin; font-size: 3.6vmin; font-weight: 700; text-shadow: 0 0.1em 0.3em #000; }
+  @media (orientation: landscape) {
+    #content { flex-direction: row; }
+    #text { height: 100%; }
+    #qr img { width: 50vmin; height: 50vmin; }
+  }
+  .hidden { display: none !important; }
+  #dot { position: fixed; right: 2vmin; bottom: 2vmin; width: 1.6vmin; height: 1.6vmin; border-radius: 50%;
+    background: #c33; opacity: 0.7; }
+  #dot.ok { background: #3c6; opacity: 0.35; }
+  #hint { position: fixed; left: 0; right: 0; bottom: 2vmin; text-align: center; font-size: 2.4vmin; opacity: 0.45; }
+  #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+
+  /* One look per scene. */
+  .nobody { background: #000; }
+  .nobody #fx::after { content: ""; position: absolute; top: 48%; height: 4%; width: 18%; border-radius: 2vmin;
+    background: radial-gradient(closest-side, #f22, #a00 60%, transparent); filter: blur(0.6vmin);
+    animation: scan 2.5s ease-in-out infinite alternate; }
+  @keyframes scan { from { left: 0; } to { left: 82%; } }
+
+  .fancy_car { background: linear-gradient(110deg, #3a2600 0%, #7a5200 40%, #f5d27a 50%, #7a5200 60%, #3a2600 100%);
+    background-size: 300% 100%; animation: shine 3s linear infinite; }
+  @keyframes shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+
+  .car { animation: breathe 4s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { background: #04121f; } 50% { background: #0d4f86; } }
+
+  .stuck { animation: snooze 6s ease-in-out infinite; }
+  @keyframes snooze { 0%, 100% { background: #01030c; } 50% { background: #0a1850; } }
+
+  .cyclist { background: repeating-linear-gradient(100deg, #013d16 0 10vmin, #0a8a35 10vmin 20vmin);
+    background-size: 200% 100%; animation: wave 2s linear infinite; }
+  @keyframes wave { from { background-position: 0 0; } to { background-position: -40.6vmin 0; } }
+
+  .pedestrian { background: linear-gradient(90deg, #8a1c1c, #8a6a12, #1c7a2a, #12607a, #4a1c8a, #8a1c6a, #8a1c1c);
+    background-size: 300% 100%; animation: rainbow 6s linear infinite; }
+  @keyframes rainbow { from { background-position: 0 0; } to { background-position: 150% 0; } }
+
+  .cyclist_flirt { animation: heartbeat 1.4s ease-out infinite; }
+  @keyframes heartbeat { 0% { background: #c2185b; } 15% { background: #4a0a26; } 28% { background: #a3154d; }
+    45%, 100% { background: #3a081e; } }
+  .heart { position: absolute; bottom: -10vmin; font-size: 8vmin; animation: float linear forwards; opacity: 0.85; }
+  @keyframes float { to { transform: translateY(-120vh) rotate(25deg); opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="stage" class="nobody">
+  <div id="fx"></div>
+  <div id="emoji"></div>
+  <div id="content">
+    <div id="text" class="hidden"></div>
+    <figure id="qr" class="hidden"><img src="qr.svg" alt="QR code"><figcaption>Scan me</figcaption></figure>
+  </div>
+</div>
+<div id="dot" title="connection to the laptop"></div>
+<div id="hint">tap for full screen</div>
+<script>
+  const EMOJI = { fancy_car: '🏎️✨', car: '👋🚗', stuck: '😴🚦', cyclist: '🚲💨', cyclist_flirt: '💘☕',
+                  pedestrian: '👋🌈', nobody: '' };
+  const stage = document.getElementById('stage'), emoji = document.getElementById('emoji'),
+        text = document.getElementById('text'), fx = document.getElementById('fx'), qr = document.getElementById('qr'),
+        dot = document.getElementById('dot'), hint = document.getElementById('hint');
+  let hearts = null;
+
+  // Largest font size at which the text still fits its box.
+  function fit() {
+    if (text.classList.contains('hidden')) return;
+    let lo = 8, hi = 400;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) / 2;
+      text.style.fontSize = mid + 'px';
+      (text.scrollHeight <= text.clientHeight && text.scrollWidth <= text.clientWidth) ? lo = mid : hi = mid;
+    }
+    text.style.fontSize = lo + 'px';
+  }
+
+  function heart() {
+    const h = document.createElement('span');
+    h.className = 'heart'; h.textContent = Math.random() < 0.8 ? '❤️' : '☕';
+    h.style.left = Math.random() * 95 + 'vw';
+    h.style.animationDuration = 4 + Math.random() * 3 + 's';
+    fx.appendChild(h); setTimeout(() => h.remove(), 7500);
+  }
+
+  function show(state) {
+    stage.className = state.scene || 'nobody';
+    emoji.textContent = EMOJI[state.scene] ?? '';
+    text.textContent = state.text || '';
+    text.classList.toggle('hidden', !state.text);
+    qr.classList.toggle('hidden', !state.qr);
+    clearInterval(hearts); hearts = null;
+    if (state.scene === 'cyclist_flirt') hearts = setInterval(heart, 500);
+    fit();
+  }
+
+  function connect() {
+    const events = new EventSource('events');
+    events.onopen = () => dot.classList.add('ok');
+    events.onmessage = (e) => show(JSON.parse(e.data));
+    events.onerror = () => dot.classList.remove('ok');  // EventSource retries by itself
+  }
+
+  window.addEventListener('resize', fit);
+  document.body.addEventListener('click', () => {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+    hint.remove();
+  });
+  setTimeout(() => hint.remove(), 15000);
+  connect();
+</script>
+</body>
+</html>

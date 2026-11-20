@@ -1,0 +1,6 @@
+# For running on your laptop without ROS (python3 -m rear_buddy.offline) and for the YOLO detector.
+ultralytics
+opencv-python
+segno
+websockets
+pytest
