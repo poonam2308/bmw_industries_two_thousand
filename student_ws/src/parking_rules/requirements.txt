@@ -1,0 +1,5 @@
+# For the YOLO detector and for running the offline tool / tests on your laptop without ROS.
+ultralytics
+opencv-python
+numpy
+pytest
