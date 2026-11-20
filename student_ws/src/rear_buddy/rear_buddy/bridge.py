@@ -126,7 +126,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--url', default='ws://10.42.0.1:8765', help="the car's Foxglove bridge")
     p.add_argument('--topic', default='/back_camera/image/compressed', help='camera topic (CompressedImage)')
-    p.add_argument('--fancy', default='never', choices=['never', 'always'], help='fancy-car check to use')
+    p.add_argument('--fancy', default='clip', choices=['clip', 'always', 'budget', 'never'],
+                   help='car brand check: clip (Porsche/Audi/BMW -> job pitch, Toyota/small -> old is gold) or a fixed answer')
     p.add_argument('--flirt', action='store_true', help='demo only: cyclists get the flirt texts')
     p.add_argument('--display', action='store_true', help='serve the rear display page for a phone')
     p.add_argument('--port', type=int, default=8080, help='port of the rear display page')

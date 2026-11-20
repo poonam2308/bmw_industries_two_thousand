@@ -1,7 +1,7 @@
 """Object detection on one frame: what is behind the car.
 
-Uses an off-the-shelf YOLO model (COCO classes). YOLO only knows "car", not "fancy car": that decision is made
-by a separate fancy-car check (see fancy.py) on the closest vehicle.
+Uses an off-the-shelf YOLO model (COCO classes). YOLO only knows "car", not the brand: that is decided by a
+separate brand check (see fancy.py) on the closest vehicle.
 """
 from dataclasses import dataclass
 
@@ -16,7 +16,8 @@ class Detection:
     conf: float                # detector confidence 0..1
     box: tuple                 # (x1, y1, x2, y2) in pixels
     area: float                # box area as a fraction of the image: bigger = closer
-    fancy: bool | None = None  # vehicles only: set by the fancy-car check, None = not checked
+    tier: str | None = None    # vehicles only, from the brand check: 'premium', 'budget' or None
+    brand: str | None = None   # vehicles only: the recognised brand, None = unknown or not checked
 
 
 class Detector:

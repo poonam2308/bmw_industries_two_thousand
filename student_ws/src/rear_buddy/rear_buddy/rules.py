@@ -12,6 +12,9 @@ from .detector import BIKES, VEHICLES
 from .messages import ANIMATIONS, FLIRT_PROFILE, MESSAGES, PROFILE
 
 
+TIER_SCENES = {'premium': 'fancy_car', 'budget': 'budget_car'}  # brand check tier -> scene
+
+
 def overlap(a, b):
     """Fraction of box a that lies inside box b."""
     ax1, ay1, ax2, ay2 = a.box
@@ -23,7 +26,8 @@ def overlap(a, b):
 
 
 def classify(detections, min_area=0.01):
-    """The scene for one frame: fancy_car, car, cyclist, pedestrian or nobody, plus the detection it is about.
+    """The scene for one frame: fancy_car, budget_car, car, cyclist, pedestrian or nobody, plus the detection it is
+    about.
 
     The closest (biggest) subject wins. Tiny boxes (far away, below min_area of the image) are ignored.
     """
@@ -32,7 +36,7 @@ def classify(detections, min_area=0.01):
     vehicles = [d for d in dets if d.label in VEHICLES]
     candidates = [('cyclist', b) for b in bikes]
     for v in vehicles:
-        candidates.append(('fancy_car' if v.fancy else 'car', v))
+        candidates.append((TIER_SCENES.get(v.tier, 'car'), v))
     for p in (d for d in dets if d.label == 'person'):
         if any(overlap(p, v) > 0.7 for v in vehicles):
             continue  # the driver seen through the windscreen belongs to the car

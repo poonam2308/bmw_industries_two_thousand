@@ -48,6 +48,9 @@
     background-size: 300% 100%; animation: shine 3s linear infinite; }
   @keyframes shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
 
+  .budget_car { animation: warm 4s ease-in-out infinite; }
+  @keyframes warm { 0%, 100% { background: #2e1700; } 50% { background: #8a4b00; } }
+
   .car { animation: breathe 4s ease-in-out infinite; }
   @keyframes breathe { 0%, 100% { background: #04121f; } 50% { background: #0d4f86; } }
 
@@ -81,7 +84,7 @@
 <div id="dot" title="connection to the laptop"></div>
 <div id="hint">tap for full screen</div>
 <script>
-  const EMOJI = { fancy_car: '🏎️✨', car: '👋🚗', stuck: '😴🚦', cyclist: '🚲💨', cyclist_flirt: '💘☕',
+  const EMOJI = { fancy_car: '🏎️✨', budget_car: '😊🚗', car: '👋🚗', stuck: '😴🚦', cyclist: '🚲💨', cyclist_flirt: '💘☕',
                   pedestrian: '👋🌈', nobody: '' };
   const stage = document.getElementById('stage'), emoji = document.getElementById('emoji'),
         text = document.getElementById('text'), fx = document.getElementById('fx'), qr = document.getElementById('qr'),

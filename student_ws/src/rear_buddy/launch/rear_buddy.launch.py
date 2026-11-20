@@ -12,7 +12,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     args = {
-        'fancy': ('never', 'fancy-car check: never or always'),
+        'fancy': ('clip', 'car brand check: clip, always, budget or never'),
         'flirt': ('false', 'demo only: the car flirts with cyclists'),
         'brightness': ('0.5', 'rear LED brightness 0..1'),
         'front': ('white', 'headlights while running: white or off'),

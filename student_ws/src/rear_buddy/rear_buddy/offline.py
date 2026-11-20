@@ -2,7 +2,8 @@
 """Run Rear Buddy without ROS and without the car: your webcam plays the rear camera.
 
     python3 -m rear_buddy.offline                         # webcam 0, live window, q to quit
-    python3 -m rear_buddy.offline --fancy always          # every closest car counts as fancy (demo with a photo)
+    python3 -m rear_buddy.offline --source car.jpg        # brand check: Porsche/Audi/BMW pitch, Toyota old is gold
+    python3 -m rear_buddy.offline --fancy always          # every car gets the job pitch (demo with any car photo)
     python3 -m rear_buddy.offline --source clip.mp4       # a video file
     python3 -m rear_buddy.offline --flirt                 # demo only: the car flirts with cyclists
     python3 -m rear_buddy.offline --source photos/        # every image in a folder, any key for the next one
@@ -92,7 +93,8 @@ def run_stream(source, detector, fancy, show, flirt, on_reaction):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--source', default='0', help='webcam index, video file, image file or image folder')
-    p.add_argument('--fancy', default='never', choices=['never', 'always'], help='fancy-car check to use')
+    p.add_argument('--fancy', default='clip', choices=['clip', 'always', 'budget', 'never'],
+                   help='car brand check: clip (Porsche/Audi/BMW -> job pitch, Toyota/small -> old is gold) or a fixed answer')
     p.add_argument('--flirt', action='store_true', help='demo only: the car flirts with cyclists')
     p.add_argument('--model', default='yolo11n.pt', help='YOLO weights (downloaded on first use)')
     p.add_argument('--conf', type=float, default=0.4, help='minimum detection confidence')

@@ -37,12 +37,12 @@ class RearBuddy(Node):
         super().__init__('rear_buddy')
         topic = self.declare_parameter('topic', '/back_camera/image/compressed').value
         model = self.declare_parameter('model', 'yolo11n.pt').value
-        fancy = self.declare_parameter('fancy', 'never').value
+        fancy = self.declare_parameter('fancy', 'clip').value  # car brand check: clip, always, budget, never
         rate_hz = self.declare_parameter('rate_hz', 2.0).value
         flirt = self.declare_parameter('flirt', False).value  # demo only: the car flirts with cyclists
 
         self.detector = Detector(model)
-        self.fancy = make_fancy_check(fancy)
+        self.fancy = make_fancy_check(fancy, log=self.get_logger().info)
         self.director = Director(flirt=flirt)
         self.latest_image = None
         self.stopped_since = None

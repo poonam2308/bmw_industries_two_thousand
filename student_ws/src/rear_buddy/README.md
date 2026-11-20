@@ -4,8 +4,9 @@ BITT looks through its rear camera and entertains whoever is behind it while we 
 
 | Behind the car | Display text | Rear LEDs |
 |---|---|---|
-| Fancy car | Job pitch: hire me | `gold_shine` |
-| Ordinary car | Friendly hello | `breathing` |
+| Porsche, Audi, BMW | Job pitch: hire me (+ LinkedIn QR code) | `gold_shine` |
+| Toyota, small car | Hi :) Old is gold. | `breathing` |
+| Other car (or brand unsure) | Friendly hello | `breathing` |
 | Ordinary car, we stand still > 30 s | Traffic-jam jokes | `sleepy` |
 | Cyclist | Cyclist jokes | `green_wave` |
 | Cyclist, **flirt mode** (demo only, off by default) | The car asks them out for coffee | `hearts` |
@@ -17,15 +18,20 @@ Texts live in [rear_buddy/messages.py](rear_buddy/messages.py). For the job pitc
 
 ## How it works
 
+**Car brands**: the closest car is cropped and recognised with CLIP (open_clip ViT-L-14), zero-shot, offline once the
+weights (~1.7 GB) are downloaded on the first run; download them at home, the car's Wi-Fi has no internet. Brand lists:
+`CAR_BRANDS` and `BUDGET_DESCRIPTIONS` in [messages.py](rear_buddy/messages.py); when the model is unsure (< 50 %) the
+car gets the normal hello. `--fancy always|budget|never` replaces the check with a fixed answer for tests and demos.
+On 8 test photos: Porsche, Audi, BMW, 2 Toyotas, Mini and VW right; a BMW police car came out unsure (normal hello).
+
 ```text
-image ─▶ detector.py (YOLO: person, bicycle, car, ...) ─▶ fancy.py (closest car fancy?) ─▶ rules.classify (scene)
+image ─▶ detector.py (YOLO: person, bicycle, car, ...) ─▶ fancy.py (closest car: brand?) ─▶ rules.classify (scene)
       ─▶ rules.Director (stable: confirm 3 frames, hold 8 s, rotate text every 20 s) ─▶ Reaction(scene, text, animation)
 ```
 
 - `classify` picks the closest subject. A rider on a bicycle counts as a cyclist, a driver behind the windscreen as
   the car.
-- The fancy-car check is a placeholder for now (`--fancy never|always`): YOLO only knows "car". Plug in a car
-  make/model classifier or a vision LLM later.
+- YOLO only knows "car": the brand comes from the CLIP check in `fancy.py` (see "Car brands" above).
 
 ## On your laptop (no ROS, no car): your webcam is the rear camera
 
@@ -34,7 +40,8 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m pytest test/                               # rules, no camera needed
 python3 -m rear_buddy.offline                         # webcam, q to quit
-python3 -m rear_buddy.offline --fancy always          # hold a sports-car photo up to the camera
+python3 -m rear_buddy.offline --source car.jpg        # brand check on a photo (Porsche/Audi/BMW, Toyota, ...)
+python3 -m rear_buddy.offline --fancy always          # every car gets the job pitch
 python3 -m rear_buddy.offline --flirt                 # demo only
 python3 -m rear_buddy.offline --display               # + rear display: open the printed address on your phone
 python3 -m rear_buddy.offline --source photos/        # a folder of test images
@@ -116,4 +123,4 @@ dependencies (the car's Wi-Fi has none). A small screen later: any device with a
 
 ## Next steps
 
-- A real fancy-car check.
+- Check the brand recognition with the real rear camera (angle, distance, light) and tune `min_conf`.

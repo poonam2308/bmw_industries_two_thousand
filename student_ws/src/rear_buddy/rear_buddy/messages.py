@@ -31,8 +31,19 @@ try:  # local, git-ignored overrides with your real details
 except ImportError:
     pass
 
+# Brand check on the closest car (fancy.py, CLIP, runs offline). 'premium' brands get the job pitch, 'budget' brands
+# get "old is gold". 'other' brands are there so the model has alternatives to choose from: they get the normal hello,
+# as does every car the model is unsure about.
+CAR_BRANDS = {
+    'premium': ['Porsche', 'Audi', 'BMW'],
+    'budget': ['Toyota', 'Fiat', 'Mini'],
+    'other': ['Mercedes-Benz', 'Volkswagen', 'Ford', 'Opel', 'Renault', 'Skoda', 'Tesla', 'Hyundai'],
+}
+# Descriptions that also count as budget, for small cars of any brand.
+BUDGET_DESCRIPTIONS = ['a small cheap city car', 'a small old hatchback']
+
 MESSAGES = {
-    # A fancy car behind us: job pitch, with name and LinkedIn.
+    # A premium car (Porsche, Audi, BMW) behind us: job pitch, with name and LinkedIn.
     'fancy_car': [
         'Nice car! You clearly make good decisions.\nMake another one: hire {name}.\n{skills}\n{languages}\n'
         '{linkedin}',
@@ -40,7 +51,11 @@ MESSAGES = {
         "Let's both move forward.\n{name} - {linkedin}",
         'I built the brain of this car.\nImagine what I could build for your company.\n{name} - {linkedin}',
     ],
-    # An ordinary car behind us.
+    # A budget or small car (Toyota, small cars) behind us.
+    'budget_car': [
+        'Hi :) Old is gold.',
+    ],
+    # An ordinary car behind us (another brand, or the brand check is unsure).
     'car': [
         'Hello back there! Thanks for keeping your distance.',
         'Fun fact: this car sees you with a neural network. You look great.',
@@ -78,6 +93,7 @@ MESSAGES = {
 # Rear LED animation per scene (see animations.py).
 ANIMATIONS = {
     'fancy_car': 'gold_shine',
+    'budget_car': 'breathing',
     'car': 'breathing',
     'stuck': 'sleepy',
     'cyclist': 'green_wave',

@@ -131,7 +131,7 @@ class FakeDisplay:
 
 def make_runner(clock, published, display, flirt=True):
     cyclist = [Detection('bicycle', 0.9, (0, 0, 40, 40), 0.5)]
-    return Runner(detector=lambda frame: cyclist, fancy=lambda f, d: False,
+    return Runner(detector=lambda frame: cyclist, fancy=lambda f, d: (None, None),
                   director=Director(confirm_frames=1, flirt=flirt, clock=clock), camera_topic=CAMERA,
                   publish=lambda topic, payload: published.append((topic, payload)), display=display,
                   log=lambda m: None, clock=clock)
@@ -168,14 +168,14 @@ def test_runner_lights_off_and_no_leds():
     runner.lights_off()
     off = codec.decode('car_interfaces/LightsCmd', published[-1][1])
     assert off['rear_rgb'] == bytes(96) and off['front_rgb'] == bytes(12)
-    quiet = Runner(lambda f: [], lambda f, d: False, Director(), CAMERA, publish=None, log=lambda m: None)
+    quiet = Runner(lambda f: [], lambda f, d: (None, None), Director(), CAMERA, publish=None, log=lambda m: None)
     quiet.tick()
     quiet.lights_off()  # nothing to publish to, must not fail
 
 
 def test_runner_warns_about_a_different_message_definition():
     logs = []
-    runner = Runner(lambda f: [], lambda f, d: False, Director(), CAMERA, log=logs.append)
+    runner = Runner(lambda f: [], lambda f, d: (None, None), Director(), CAMERA, log=logs.append)
     runner.on_message('/batt_status', codec.encode('car_interfaces/BattStatus', {}), {
         'schemaName': 'car_interfaces/msg/BattStatus', 'schemaEncoding': 'ros2msg',
         'schema': 'std_msgs/Header header\nfloat32 volts'})

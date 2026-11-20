@@ -4,9 +4,9 @@ from rear_buddy.messages import MESSAGES
 from rear_buddy.rules import Director, classify
 
 
-def det(label, box, fancy=None, size=(640, 480)):
+def det(label, box, tier=None, size=(640, 480)):
     x1, y1, x2, y2 = box
-    return Detection(label, 0.9, box, (x2 - x1) * (y2 - y1) / (size[0] * size[1]), fancy)
+    return Detection(label, 0.9, box, (x2 - x1) * (y2 - y1) / (size[0] * size[1]), tier)
 
 
 class FakeClock:
@@ -21,9 +21,19 @@ def test_nothing_behind():
     assert classify([]) == ('nobody', None)
 
 
-def test_fancy_and_normal_car():
-    assert classify([det('car', (100, 100, 400, 300), fancy=True)])[0] == 'fancy_car'
-    assert classify([det('car', (100, 100, 400, 300), fancy=False)])[0] == 'car'
+def test_car_tiers():
+    assert classify([det('car', (100, 100, 400, 300), tier='premium')])[0] == 'fancy_car'
+    assert classify([det('car', (100, 100, 400, 300), tier='budget')])[0] == 'budget_car'
+    assert classify([det('car', (100, 100, 400, 300), tier=None)])[0] == 'car'
+
+
+def test_budget_car_says_old_is_gold():
+    r = Director(confirm_frames=1, clock=FakeClock()).update('budget_car')
+    assert r.text == 'Hi :) Old is gold.' and r.animation == 'breathing'
+
+
+def test_standing_still_behind_a_budget_car_stays_old_is_gold():
+    assert Director(confirm_frames=1, clock=FakeClock()).update('budget_car', stopped_s=99).scene == 'budget_car'
 
 
 def test_rider_on_bicycle_is_a_cyclist():
